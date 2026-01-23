@@ -1,0 +1,26 @@
+
+#ifndef _C3_in108_
+#define _C3_in108_
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+extern EIF_REFERENCE F134_2879(EIF_REFERENCE);
+static EIF_REFERENCE F134_2880_body(EIF_REFERENCE);
+extern EIF_REFERENCE F134_2880(EIF_REFERENCE);
+static EIF_REFERENCE F134_2881_body(EIF_REFERENCE);
+extern EIF_REFERENCE F134_2881(EIF_REFERENCE);
+extern void F134_2882(EIF_REFERENCE, EIF_POINTER);extern void en_local_host_name(EIF_POINTER);
+
+extern void EIF_Minit108(void);
+extern void F1026_8859(EIF_REFERENCE, EIF_POINTER);
+extern EIF_REFERENCE F853_7200(EIF_REFERENCE);
+extern void F189_3306(EIF_REFERENCE, EIF_REFERENCE, EIF_REFERENCE);
+extern void F234_4723(EIF_REFERENCE, EIF_INTEGER_32);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

@@ -1,0 +1,40 @@
+
+#ifndef _C10_li490_
+#define _C10_li490_
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+extern EIF_BOOLEAN F467_5858(EIF_REFERENCE, EIF_CHARACTER_8);
+extern EIF_INTEGER_32 F467_5859(EIF_REFERENCE, EIF_CHARACTER_8, EIF_INTEGER_32);
+extern void F467_5860(EIF_REFERENCE, EIF_CHARACTER_8);
+extern EIF_INTEGER_32 F467_5862(EIF_REFERENCE, EIF_CHARACTER_8);
+extern EIF_CHARACTER_8 F467_5863(EIF_REFERENCE);
+extern EIF_BOOLEAN F467_5864(EIF_REFERENCE);
+extern EIF_BOOLEAN F467_5866(EIF_REFERENCE);
+extern void F467_5869(EIF_REFERENCE, EIF_REFERENCE);
+extern void F467_5870(EIF_REFERENCE, EIF_REFERENCE, EIF_REFERENCE);
+extern EIF_BOOLEAN F467_5871(EIF_REFERENCE, EIF_REFERENCE);
+extern EIF_BOOLEAN F467_5872(EIF_REFERENCE, EIF_REFERENCE);
+extern EIF_REFERENCE F467_5873(EIF_REFERENCE);
+extern void F467_1(EIF_REFERENCE, int);
+extern void EIF_Minit490(void);
+extern EIF_REFERENCE F819_6868(EIF_REFERENCE);
+extern void F819_6893(EIF_REFERENCE, EIF_REFERENCE);
+extern char *(*R5311[])();
+extern char *(*R5312[])();
+extern char *(*R5313[])();
+extern char *(*R5319[])();
+extern char *(*R5324[])();
+extern char *(*R5326[])();
+extern char *(*R5303[])();
+extern long O5305[];
+extern EIF_TYPE_INDEX Y5159[];
+extern EIF_TYPE_INDEX *Y5159_gen_type [];
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
