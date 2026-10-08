@@ -19,7 +19,7 @@ feature {NONE} -- Initialization
 		do
 			config := a_config
 			create http.make
-			create json.make
+			create json
 			create last_error.make_empty
 		ensure
 			config_set: config = a_config
@@ -74,7 +74,7 @@ feature -- Runner Registration
 				l_json_value := json.parse (l_response)
 				if attached {SIMPLE_JSON_OBJECT} l_json_value as l_obj then
 					if attached l_obj.item ("token") as l_token then
-						Result := l_token.string_value
+						Result := l_token.string_value.to_string_8
 					end
 				end
 			end
@@ -87,6 +87,7 @@ feature -- Runner Management
 		local
 			l_response: STRING
 			l_json_value: detachable SIMPLE_JSON_VALUE
+			l_index: INTEGER
 		do
 			create Result.make (10)
 			last_error.wipe_out
@@ -96,8 +97,12 @@ feature -- Runner Management
 				l_json_value := json.parse (l_response)
 				if attached {SIMPLE_JSON_OBJECT} l_json_value as l_obj then
 					if attached {SIMPLE_JSON_ARRAY} l_obj.item ("runners") as l_runners then
-						across l_runners as ic loop
-							if attached {SIMPLE_JSON_OBJECT} ic.item as l_runner then
+						from
+							l_index := 1
+						until
+							l_index > l_runners.count
+						loop
+							if attached l_runners.object_item (l_index) as l_runner then
 								Result.extend ([
 									json_integer (l_runner, "id"),
 									json_string (l_runner, "name"),
@@ -105,6 +110,7 @@ feature -- Runner Management
 									json_boolean (l_runner, "busy")
 								])
 							end
+							l_index := l_index + 1
 						end
 					end
 				end
@@ -129,7 +135,7 @@ feature -- Runner Management
 			l_runners: like list_runners
 		do
 			l_runners := list_runners
-			Result := across l_runners as ic some ic.item.name.same_string (a_name) end
+			Result := across l_runners as ic_runner some ic_runner.name.same_string (a_name) end
 		end
 
 	get_runner_id (a_name: STRING): INTEGER
@@ -138,9 +144,9 @@ feature -- Runner Management
 			l_runners: like list_runners
 		do
 			l_runners := list_runners
-			across l_runners as ic loop
-				if ic.item.name.same_string (a_name) then
-					Result := ic.item.id
+			across l_runners as ic_runner loop
+				if ic_runner.name.same_string (a_name) then
+					Result := ic_runner.id
 				end
 			end
 		end
@@ -149,23 +155,34 @@ feature {NONE} -- HTTP Operations
 
 	api_get (a_url: STRING): STRING
 			-- GET request to GitHub API.
+		local
+			l_response: SIMPLE_HTTP_RESPONSE
 		do
-			Result := http.get (a_url, auth_headers)
-			check_response
+			http.set_headers (auth_headers)
+			l_response := http.get (a_url)
+			check_response (l_response)
+			Result := l_response.body_string
 		end
 
 	api_post (a_url, a_body: STRING): STRING
 			-- POST request to GitHub API.
+		local
+			l_response: SIMPLE_HTTP_RESPONSE
 		do
-			Result := http.post (a_url, a_body, auth_headers)
-			check_response
+			http.set_headers (auth_headers)
+			l_response := http.post (a_url, a_body)
+			check_response (l_response)
+			Result := l_response.body_string
 		end
 
 	api_delete (a_url: STRING)
 			-- DELETE request to GitHub API.
+		local
+			l_response: SIMPLE_HTTP_RESPONSE
 		do
-			http.delete (a_url, auth_headers)
-			check_response
+			http.set_headers (auth_headers)
+			l_response := http.delete (a_url)
+			check_response (l_response)
 		end
 
 	auth_headers: HASH_TABLE [STRING, STRING]
@@ -178,11 +195,11 @@ feature {NONE} -- HTTP Operations
 			Result.put ("application/json", "Content-Type")
 		end
 
-	check_response
+	check_response (a_response: SIMPLE_HTTP_RESPONSE)
 			-- Check HTTP response for errors.
 		do
-			if http.last_status >= 400 then
-				last_error := "HTTP " + http.last_status.out + ": " + http.last_response
+			if a_response.has_error or else a_response.status >= 400 then
+				last_error := "HTTP " + a_response.status.out + ": " + a_response.body_string
 			end
 		end
 
@@ -192,7 +209,7 @@ feature {NONE} -- JSON Helpers
 			-- Extract string from JSON object.
 		do
 			if attached a_obj.item (a_key) as l_val then
-				Result := l_val.string_value
+				Result := l_val.string_value.to_string_8
 			else
 				create Result.make_empty
 			end
@@ -202,7 +219,7 @@ feature {NONE} -- JSON Helpers
 			-- Extract integer from JSON object.
 		do
 			if attached a_obj.item (a_key) as l_val then
-				Result := l_val.integer_value
+				Result := l_val.integer_value.to_integer_32
 			end
 		end
 

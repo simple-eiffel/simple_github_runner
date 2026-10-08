@@ -18,7 +18,7 @@ feature {NONE} -- Initialization
 			config_valid: a_config.is_valid
 		do
 			config := a_config
-			create k8s_client.make_with_kubeconfig
+			create k8s_client.make
 			create github_api.make (a_config)
 			namespace := "github-runners"
 			create last_error.make_empty
@@ -63,7 +63,7 @@ feature -- Deployment
 		local
 			l_token: detachable RUNNER_REGISTRATION_TOKEN
 			l_deployment: DEPLOYMENT_SPEC
-			l_service: SERVICE_SPEC
+			l_created: detachable STRING
 		do
 			last_error.wipe_out
 
@@ -79,7 +79,7 @@ feature -- Deployment
 				if not has_error then
 					-- Step 3: Create runner deployment
 					l_deployment := create_runner_deployment (l_token)
-					k8s_client.create_deployment (l_deployment, namespace)
+					l_created := k8s_client.create_deployment (l_deployment)
 
 					if k8s_client.has_error then
 						last_error := "Failed to create deployment: " + k8s_client.error_message
@@ -94,9 +94,11 @@ feature -- Deployment
 			-- Scale runner deployment to specified count.
 		require
 			count_valid: a_count >= 0
+		local
+			l_scaled: BOOLEAN
 		do
 			last_error.wipe_out
-			k8s_client.scale_deployment (runner_deployment_name, namespace, a_count)
+			l_scaled := k8s_client.scale_deployment (runner_deployment_name, namespace, a_count)
 			if k8s_client.has_error then
 				last_error := "Failed to scale: " + k8s_client.error_message
 			end
@@ -104,11 +106,13 @@ feature -- Deployment
 
 	remove_runner: BOOLEAN
 			-- Remove runner deployment from Kubernetes.
+		local
+			l_deleted: BOOLEAN
 		do
 			last_error.wipe_out
 
 			-- Delete deployment
-			k8s_client.delete_deployment (runner_deployment_name, namespace)
+			l_deleted := k8s_client.delete_deployment (runner_deployment_name, namespace)
 
 			if k8s_client.has_error then
 				last_error := "Failed to delete deployment: " + k8s_client.error_message
@@ -121,14 +125,24 @@ feature -- Deployment
 	get_runner_status: detachable TUPLE [ready: INTEGER; total: INTEGER; status: STRING]
 			-- Get current runner deployment status.
 		local
-			l_deployment: detachable K8S_DEPLOYMENT
+			l_json: detachable STRING
+			l_deployment: K8S_DEPLOYMENT
+			l_status: STRING
 		do
-			l_deployment := k8s_client.get_deployment (runner_deployment_name, namespace)
-			if l_deployment /= Void then
+			l_json := k8s_client.get_deployment (runner_deployment_name, namespace)
+			if l_json /= Void and then not l_json.is_empty then
+				create l_deployment.make_from_json (l_json)
+				if l_deployment.is_complete then
+					l_status := "Ready"
+				elseif l_deployment.is_progressing then
+					l_status := "Progressing"
+				else
+					l_status := "Degraded"
+				end
 				Result := [
 					l_deployment.ready_replicas,
 					l_deployment.replicas,
-					l_deployment.status_message
+					l_status
 				]
 			end
 		end
@@ -150,18 +164,50 @@ feature {NONE} -- Implementation
 	ensure_namespace_exists
 			-- Create namespace if it doesn't exist.
 		local
-			l_namespaces: ARRAYED_LIST [K8S_NAMESPACE]
 			l_exists: BOOLEAN
+			l_created: detachable STRING
 		do
-			l_namespaces := k8s_client.namespaces
-			l_exists := across l_namespaces as ic some ic.item.name.same_string (namespace) end
+			l_exists := namespace_exists (namespace)
 
 			if not l_exists then
-				k8s_client.create_namespace (namespace)
+				l_created := k8s_client.post_resource ("/api/v1/namespaces",
+					"{%"apiVersion%":%"v1%",%"kind%":%"Namespace%",%"metadata%":{%"name%":%"" + namespace + "%"}}")
 				if k8s_client.has_error then
 					last_error := "Failed to create namespace: " + k8s_client.error_message
 				end
 			end
+		end
+
+	namespace_exists (a_name: STRING): BOOLEAN
+			-- Does namespace `a_name' exist in the cluster?
+		local
+			l_index: INTEGER
+		do
+			if attached k8s_client.list_namespaces as l_json and then not l_json.is_empty then
+				if attached {SIMPLE_JSON_OBJECT} json_parser.parse (l_json) as l_root and then
+					attached l_root.array_item ("items") as l_items
+				then
+					from
+						l_index := 1
+					until
+						l_index > l_items.count or Result
+					loop
+						if attached l_items.object_item (l_index) as l_item and then
+							attached l_item.object_item ("metadata") as l_metadata and then
+							attached l_metadata.string_item ("name") as l_name
+						then
+							Result := l_name.same_string (a_name)
+						end
+						l_index := l_index + 1
+					end
+				end
+			end
+		end
+
+	json_parser: SIMPLE_JSON
+			-- JSON parser.
+		once
+			create Result
 		end
 
 	create_runner_deployment (a_token: RUNNER_REGISTRATION_TOKEN): DEPLOYMENT_SPEC
@@ -169,6 +215,7 @@ feature {NONE} -- Implementation
 		local
 			l_labels_string: STRING
 			l_github_url: STRING
+			l_spec: DEPLOYMENT_SPEC
 		do
 			-- Build labels string for runner
 			create l_labels_string.make_empty
@@ -176,7 +223,7 @@ feature {NONE} -- Implementation
 				if not l_labels_string.is_empty then
 					l_labels_string.append (",")
 				end
-				l_labels_string.append (ic.item)
+				l_labels_string.append (ic)
 			end
 
 			-- Build GitHub URL
@@ -187,27 +234,26 @@ feature {NONE} -- Implementation
 			end
 
 			create Result.make
-			Result.set_name (runner_deployment_name)
-			Result.set_replicas (1)
-			Result.set_image (config.runner_image)
+			Result.name := runner_deployment_name
+			Result.image := config.runner_image
 
-			-- Runner configuration via environment variables
-			Result.add_env ("RUNNER_NAME", config.runner_name)
-			Result.add_env ("RUNNER_TOKEN", a_token.token)
-			Result.add_env ("RUNNER_URL", l_github_url)
-			Result.add_env ("RUNNER_LABELS", l_labels_string)
-			Result.add_env ("RUNNER_GROUP", config.runner_group)
-
-			-- Resource limits
-			Result.set_resources ("500m", "2000m", "1Gi", "4Gi")
-
-			-- Labels for the deployment
-			Result.add_label ("app", "github-runner")
-			Result.add_label ("runner-name", config.runner_name)
-
-			-- Selector
-			Result.add_match_label ("app", "github-runner")
-			Result.add_match_label ("runner-name", config.runner_name)
+			-- The fluent setters return `Result' itself, so chain them.
+			l_spec := Result.set_namespace (namespace)
+				.set_replicas (1)
+				-- Runner configuration via environment variables
+				.add_env ("RUNNER_NAME", config.runner_name)
+				.add_env ("RUNNER_TOKEN", a_token.token)
+				.add_env ("RUNNER_URL", l_github_url)
+				.add_env ("RUNNER_LABELS", l_labels_string)
+				.add_env ("RUNNER_GROUP", config.runner_group)
+				-- Resource limits
+				.set_resources ("500m", "2000m", "1Gi", "4Gi")
+				-- Labels for the deployment
+				.add_label ("app", "github-runner")
+				.add_label ("runner-name", config.runner_name)
+				-- Selector
+				.add_selector ("app", "github-runner")
+				.add_selector ("runner-name", config.runner_name)
 		end
 
 feature -- YAML Generation
@@ -223,7 +269,7 @@ feature -- YAML Generation
 			if l_token /= Void then
 				l_deployment := create_runner_deployment (l_token)
 				create l_builder.make
-				l_builder.add_deployment (l_deployment, namespace)
+				l_builder.add_raw (l_deployment.to_json)
 				Result := l_builder.to_yaml
 			else
 				Result := "# Error: Could not get registration token"

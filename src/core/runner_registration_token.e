@@ -31,14 +31,14 @@ feature {NONE} -- Initialization
 			l_expires_string: STRING
 		do
 			if attached a_json.item ("token") as l_token then
-				token := l_token.string_value
+				token := l_token.string_value.to_string_8
 			else
 				create token.make_empty
 			end
 
 			-- Parse ISO 8601 date: "2025-12-18T19:30:00Z"
 			if attached a_json.item ("expires_at") as l_expires then
-				l_expires_string := l_expires.string_value
+				l_expires_string := l_expires.string_value.to_string_8
 				expires_at := parse_iso_date (l_expires_string)
 			else
 				create expires_at.make_now
