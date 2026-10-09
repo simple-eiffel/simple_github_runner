@@ -269,7 +269,7 @@ feature -- YAML Generation
 			if l_token /= Void then
 				l_deployment := create_runner_deployment (l_token)
 				create l_builder.make
-				l_builder.add_raw (l_deployment.to_json)
+				l_builder.add_json (l_deployment.to_json)
 				Result := l_builder.to_yaml
 			else
 				Result := "# Error: Could not get registration token"
