@@ -25,6 +25,11 @@ feature {NONE} -- Initialization
 			print ("%N=== Results: " + passed.out + " passed, " + failed.out + " failed ===%N")
 			if failed = 0 then
 				print ("ALL TESTS PASSED%N")
+			else
+					-- port-coordination #17: say it the way every runner and ec.sh do, and exit 1, so
+					-- a failure is not reported as a pass by anything reading either.
+				print ("TESTS FAILED%N")
+				(create {EXCEPTIONS}).die (1)
 			end
 		end
 
